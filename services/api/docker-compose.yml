@@ -1,0 +1,41 @@
+# Exemplo: API + Postgres para homologação local (ajuste senhas e volumes).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ironbody
+      POSTGRES_PASSWORD: ironbody_secret
+      POSTGRES_DB: ironbody
+    ports:
+      - '5432:5432'
+    volumes:
+      - ironbody_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ironbody -d ironbody']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - '3001:3001'
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://ironbody:ironbody_secret@db:5432/ironbody?schema=public
+      JWT_SECRET: troque-em-producao
+      JWT_REFRESH_SECRET: troque-em-producao
+      APP_URL_WEB: http://localhost:3000
+      APP_URL_API: http://localhost:3001
+      WEB_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+      # Preencha chaves Stripe de teste/live conforme ambiente:
+      # STRIPE_SECRET_KEY=
+      # STRIPE_WEBHOOK_SECRET=
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  ironbody_pg:

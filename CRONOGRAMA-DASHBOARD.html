@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<!--
+  REGRAS DE ATUALIZAÇÃO (IronBody — cronograma)
+
+  Sempre que uma fase for concluída:
+  - Marcar tasks como done no array PHASES (DEFAULT_DONE_ENV) ou só pelos checkboxes + localStorage
+  - Atualizar texto/status da fase no PHASES (nome, duration)
+  - Atualizar roadmap-flow e status-board se o estágio mudar
+  - Revisar o resumo: card "Produto F1–F4" deve refletir 100% quando p1–p4 estiverem todas checked
+
+  Sempre que houver nova feature:
+  - Criar nova fase ou adicionar tasks em PHASES
+  - Atualizar secção Backlog / PRÓXIMA SESSÃO se necessário
+  - Priorizar clareza (não complexidade)
+  - Manter STORAGE_KEY: ironbody_cronograma_v3 (não alterar sem migração consciente)
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IronBody – Cronograma do Projeto</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #fafafa;
+      --muted: #71717a;
+      --accent: #3b82f6;
+      --success: #22c55e;
+      --warning: #eab308;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .summary-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .summary-card .value { font-size: 1.75rem; font-weight: 700; }
+    .summary-card .label { color: var(--muted); font-size: 0.8rem; }
+    .summary-card.ok .value { color: var(--success); }
+    .summary-card.warning .value { color: var(--warning); }
+    .summary-card.danger .value { color: var(--danger); }
+    .phase {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .phase-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .phase-header:hover { background: rgba(255,255,255,0.02); }
+    .phase-title {
+      font-weight: 600;
+      font-size: 1.05rem;
+    }
+    .phase-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .phase-duration {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .phase-status {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    .phase-status.pendente { background: rgba(113,113,122,0.3); color: var(--muted); }
+    .phase-status.em-andamento { background: rgba(59,130,246,0.2); color: var(--accent); }
+    .phase-status.concluida { background: rgba(34,197,94,0.2); color: var(--success); }
+    .phase-status.atrasada { background: rgba(239,68,68,0.2); color: var(--danger); }
+    .phase-body { padding: 0 20px 16px; }
+    .phase-body table { width: 100%; border-collapse: collapse; }
+    .phase-body th, .phase-body td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    .phase-body th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
+    .phase-body tr:last-child td { border-bottom: none; }
+    .phase-body tr.done td { color: var(--muted); }
+    .phase-body tr.done .task-name { text-decoration: line-through; }
+    .task-name { font-size: 0.95rem; }
+    .task-effort { color: var(--muted); font-size: 0.8rem; }
+    .checkbox-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .checkbox-wrap input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+    .data-prazo {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .data-prazo input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .btn-reset {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      margin-top: 16px;
+    }
+    .btn-reset:hover { background: var(--border); color: var(--text); }
+    .footer-note {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .status-board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .status-board .box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.88rem;
+    }
+    .status-board .box h3 {
+      margin: 0 0 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .status-board .ok { border-left: 3px solid var(--success); }
+    .status-board .warn { border-left: 3px solid var(--warning); }
+    .status-board .bad { border-left: 3px solid var(--danger); }
+    .roadmap-flow {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .alerts {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      font-size: 0.88rem;
+    }
+    .alerts h3 { margin: 0 0 8px; font-size: 0.9rem; color: var(--danger); }
+    .alerts ul { margin: 0; padding-left: 1.2rem; color: var(--text); }
+    .tip {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .tip strong { color: var(--accent); }
+    .global-status {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .global-status .gs-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.88rem;
+    }
+    .global-status .gs-card h2 {
+      margin: 0 0 6px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .global-status .gs-card .big {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+    .global-status .gs-card.ok .big { color: var(--success); }
+    .global-status .gs-card.bad .big { color: var(--danger); }
+    .next-session {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+      font-size: 0.88rem;
+    }
+    .next-session h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .next-session ul { margin: 0; padding-left: 1.2rem; color: var(--text); }
+    .backlog-tiers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .backlog-tiers .tier {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.85rem;
+    }
+    .backlog-tiers .tier h3 {
+      margin: 0 0 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    .backlog-tiers .tier ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+    .backlog-tiers .tier.high { border-left: 3px solid var(--danger); }
+    .backlog-tiers .tier.med { border-left: 3px solid var(--warning); }
+    .backlog-tiers .tier.low { border-left: 3px solid var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>IronBody – Cronograma do Projeto</h1>
+    <p class="subtitle">Alinhado a <a href="docs/PROJECT-ROADMAP.md" style="color:var(--accent)">docs/PROJECT-ROADMAP.md</a> · Atualizado em 30/03/2026</p>
+
+    <div class="global-status">
+      <div class="gs-card ok">
+        <h2>Produto — FASES 1 a 4</h2>
+        <div class="big" id="product-f1-f4-pct">100%</div>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:4px">Área personal · Auth · Convite · Treino simples (concluídas)</div>
+      </div>
+      <div class="gs-card bad">
+        <h2>Próxima entrega</h2>
+        <div class="big">4.1</div>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:4px">Polimento e ativação · pendente</div>
+      </div>
+    </div>
+
+    <div class="status-board">
+      <div class="box ok"><h3>Produto FASE 1–4</h3><strong>Concluídas.</strong> Personal (alunos, mídia, avaliações) · Auth · Convite · Treino simples + assign.</div>
+      <div class="box bad"><h3>Produto FASE 4.1</h3><strong>Próxima prioridade.</strong> Polimento UX (treino do dia, feedback assign, alunos sem treino).</div>
+      <div class="box warn"><h3>Produto FASE 5–6</h3>Engagement (histórico, concluir treino) · Monetização produto + Stripe LIVE / limites.</div>
+      <div class="box ok"><h3>Plataforma — Billing</h3><strong>Código pronto.</strong> Stripe webhooks, checkout, UI premium — <strong>LIVE</strong> na homologação/produção.</div>
+      <div class="box warn"><h3>Plataforma — Mídia S3</h3>Fluxo implementado; <strong>AWS</strong> (buckets, IAM, CORS) manual por ambiente.</div>
+      <div class="box warn"><h3>Plataforma — Deploy</h3>Domínio, HTTPS, <code>prisma migrate deploy</code>, envs — execução pendente conforme checklist.</div>
+    </div>
+
+    <div class="roadmap-flow">PRODUTO
+FASE 1 ✅  →  FASE 2 ✅  →  FASE 3 ✅  →  FASE 4 ✅
+        ↓
+FASE 4.1 🔴  (VOCÊ ESTÁ AQUI)
+        ↓
+FASE 5 ⚪
+        ↓
+FASE 6 🟡
+
+(Plataforma em paralelo: S3, deploy, migrate — ver docs/)</div>
+
+    <div class="alerts">
+      <h3>Atenção</h3>
+      <ul>
+        <li><strong>UX do treino</strong> — prioridade: estado vazio e erros devem parecer produto, não falha técnica (especialmente no aluno).</li>
+        <li><strong>Fluxo de validação</strong> — exercitar ponta a ponta: <strong>convite → vínculo → criar treino → atribuir → aluno visualiza</strong>.</li>
+        <li><strong>Usuário real</strong> — após 4.1, testar com personal/aluno reais para ajustar mensagens e CTAs.</li>
+      </ul>
+    </div>
+    <div class="tip">
+      <strong>FASE 4.1:</strong> refino e confiança no fluxo já entregue — evitar escopo novo até o treino e o convite estarem “inevitáveis” na percepção do utilizador.
+    </div>
+
+    <div class="next-session">
+      <h2>PRÓXIMA SESSÃO</h2>
+      <ul>
+        <li>Corrigir / suavizar erro no treino do aluno (quando aplicável)</li>
+        <li>Implementar estado vazio amigável no “Treino do dia”</li>
+        <li>Validar <strong>assign</strong> ponta a ponta</li>
+        <li>Melhorar feedback visual ao atribuir treino</li>
+        <li>Testar fluxo completo (convite → treino → visualização)</li>
+      </ul>
+    </div>
+
+    <div class="backlog-tiers">
+      <div class="tier high">
+        <h3>🔴 Alta prioridade</h3>
+        <ul>
+          <li>Concluir <strong>FASE 4.1</strong> (polimento e ativação)</li>
+        </ul>
+      </div>
+      <div class="tier med">
+        <h3>🟡 Média prioridade</h3>
+        <ul>
+          <li><strong>FASE 5</strong> — engagement (histórico, concluir treino, progresso)</li>
+        </ul>
+      </div>
+      <div class="tier low">
+        <h3>🔵 Baixa / depois</h3>
+        <ul>
+          <li>IA (treino / nutrição)</li>
+          <li>Mobile</li>
+          <li>Funcionalidades avançadas (catálogo legado, periodização, etc.)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="summary-card" id="card-tasks">
+        <div class="value" id="tasks-done">0</div>
+        <div class="label">Tarefas concluídas</div>
+      </div>
+      <div class="summary-card" id="card-total">
+        <div class="value" id="tasks-total">0</div>
+        <div class="label">Total de tarefas</div>
+      </div>
+      <div class="summary-card" id="card-pct">
+        <div class="value" id="tasks-pct">0%</div>
+        <div class="label">Progresso geral</div>
+      </div>
+      <div class="summary-card" id="card-status">
+        <div class="value" id="status-text">—</div>
+        <div class="label">Status no prazo</div>
+      </div>
+    </div>
+
+    <div id="phases"></div>
+
+    <div class="data-prazo">
+      <label>Data de início do projeto (para cálculo de prazos): </label>
+      <input type="date" id="start-date" />
+    </div>
+    <button type="button" class="btn-reset" id="btn-reset">Limpar todas as conclusões</button>
+
+    <p class="footer-note">Checklist interativo: localStorage <code>ironbody_cronograma_v3</code> (inalterado). FASES 1–4 vêm pré-marcadas; a <strong>FASE 4.1</strong> tem 6 tarefas pendentes. Secções <strong>PRÓXIMA SESSÃO</strong> e <strong>Backlog</strong> acima são guias estáticos — atualize-as ao fechar uma fase (ver comentário no topo do HTML).</p>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'ironbody_cronograma_v3';
+    const PHASES = [
+      {
+        id: 'p1',
+        name: '✅ FASE 1 — Área do personal',
+        duration: 'Concluída',
+        weeks: 0,
+        tasks: [
+          { id: 'p1.1', name: 'Listagem de alunos vinculados + página de detalhe', effort: 'OK' },
+          { id: 'p1.2', name: 'Mídias (evolução + avaliação): grid, modal, skeleton, empty states', effort: 'OK' },
+          { id: 'p1.3', name: 'Visualização de avaliações completas (API + UI)', effort: 'OK' },
+        ],
+      },
+      {
+        id: 'p2',
+        name: '✅ FASE 2 — Autenticação',
+        duration: 'Concluída',
+        weeks: 0,
+        tasks: [
+          { id: 'p2.1', name: 'Cadastro personal (default) + cadastro aluno (ALUNO)', effort: 'OK' },
+          { id: 'p2.2', name: 'Login JWT (access + refresh) + persistência no frontend', effort: 'OK' },
+          { id: 'p2.3', name: 'Proteção por role (ex.: PersonalDashboardGuard) + ?next no login/registro', effort: 'OK' },
+        ],
+      },
+      {
+        id: 'p3',
+        name: '✅ FASE 3 — Convite por link',
+        duration: 'Concluída',
+        weeks: 0,
+        tasks: [
+          { id: 'p3.1', name: 'Invitation + POST/GET/accept em /v1/invitations', effort: 'OK' },
+          { id: 'p3.2', name: 'Página pública /convite/[token] (fluxo completo vínculo)', effort: 'OK' },
+          { id: 'p3.3', name: 'Modal no personal: gerar link + copiar', effort: 'OK' },
+        ],
+      },
+      {
+        id: 'p4',
+        name: '✅ FASE 4 — Treino simples',
+        duration: 'Concluída',
+        weeks: 0,
+        tasks: [
+          { id: 'p4.1', name: 'Prisma: SimpleWorkout, SimpleWorkoutExercise, StudentWorkout + migrate', effort: 'OK' },
+          { id: 'p4.2', name: 'API: POST/GET /workouts, GET :id, POST :id/assign, GET /students/me/workout', effort: 'OK' },
+          { id: 'p4.3', name: 'Web personal: /treinos, /novo, /[id] (criar + atribuir)', effort: 'OK' },
+          { id: 'p4.4', name: 'Web aluno: Treino do dia no /dashboard/aluno', effort: 'OK' },
+        ],
+      },
+      {
+        id: 'p41',
+        name: '🔴 FASE 4.1 — Polimento e ativação (PENDENTE)',
+        duration: 'Próxima prioridade · 2–4 dias',
+        weeks: 0.4,
+        tasks: [
+          { id: 'p41.1', name: 'Estado vazio amigável no aluno (treino / Treino do dia)', effort: 'pendente' },
+          { id: 'p41.2', name: 'Substituir erro por UX humanizada (rede / API)', effort: 'pendente' },
+          { id: 'p41.3', name: 'Feedback visual ao atribuir treino (personal)', effort: 'pendente' },
+          { id: 'p41.4', name: 'Indicador de alunos sem treino (dashboard ou lista)', effort: 'pendente' },
+          { id: 'p41.5', name: 'Melhor onboarding pós-convite (1º acesso aluno)', effort: 'pendente' },
+          { id: 'p41.6', name: 'Teste completo do fluxo real (convite → treino → visualização)', effort: 'pendente' },
+        ],
+      },
+      {
+        id: 'p5',
+        name: '⚪ FASE 5 — Engagement (planejado)',
+        duration: '1–3 sprints',
+        weeks: 1.2,
+        tasks: [
+          { id: 'p5.1', name: 'Histórico de treinos atribuídos / linha do tempo', effort: 'TBD' },
+          { id: 'p5.2', name: 'Marcar treino como concluído (sessão ou flag)', effort: 'TBD' },
+          { id: 'p5.3', name: 'Registro de progresso básico', effort: 'TBD' },
+          { id: 'p5.4', name: 'Upload fotos evolução no fluxo do aluno (reuso mídia)', effort: 'TBD' },
+        ],
+      },
+      {
+        id: 'p6',
+        name: '🟡 FASE 6 — Monetização vendável',
+        duration: 'paralelo ao produto',
+        weeks: 0.6,
+        tasks: [
+          { id: 'p6.1', name: 'Limites FREE vs PREMIUM na UI + mensagens ao bater teto', effort: 'TBD' },
+          { id: 'p6.2', name: 'Stripe LIVE + webhook HTTPS (STRIPE-LIVE-CHECKLIST.md)', effort: 'deploy' },
+          { id: 'p6.3', name: 'Alinhar MONETIZACAO-CHECKLIST.md com fluxo real atual', effort: '0,5 dia' },
+        ],
+      },
+      {
+        id: 'plat',
+        name: '✅ Plataforma — Billing + premium (código)',
+        duration: 'Concluída (ref. técnica)',
+        weeks: 0,
+        tasks: [
+          { id: 'pl.1', name: 'Guards premium / planType + docs BILLING-PREMIUM.md', effort: 'OK' },
+          { id: 'pl.2', name: 'UI: SubscriptionContext, checkout, portal, DashboardPlanSection', effort: 'OK' },
+          { id: 'pl.3', name: 'Stripe: webhooks, idempotência, STRIPE-EVENTS-VALIDATION.md', effort: 'OK' },
+          { id: 'pl.4', name: 'next build estável (monorepo) — ver BUILD-STABILITY.md se regressão', effort: 'contínuo' },
+        ],
+      },
+      {
+        id: 's3',
+        name: '🟡 Plataforma — Mídia S3',
+        duration: 'Código OK · infra manual',
+        weeks: 0.35,
+        tasks: [
+          { id: 's3.1', name: 'Backend MediaFile + signed URL + rotas (implementado)', effort: 'OK' },
+          { id: 's3.2', name: 'Frontend evolução / avaliação / exercício-mídia (implementado)', effort: 'OK' },
+          { id: 's3.3', name: 'AWS: conta, buckets, IAM, CORS por ambiente', effort: 'manual' },
+        ],
+      },
+      {
+        id: 'dep',
+        name: '🔴 Plataforma — Deploy / homologação',
+        duration: '2–4 dias',
+        weeks: 0.5,
+        tasks: [
+          { id: 'd.1', name: 'Domínio + HTTPS + NEXT_PUBLIC_API_URL', effort: 'externo' },
+          { id: 'd.2', name: 'API + prisma migrate deploy no ambiente alvo', effort: '0,5 dia' },
+          { id: 'd.3', name: 'Smoke: auth, convite, treino, billing test', effort: '0,5 dia' },
+          { id: 'd.4', name: 'Documentar processo deploy (pipeline ou manual)', effort: '0,5 dia' },
+        ],
+      },
+    ];
+
+    const DEFAULT_DONE_ENV = {
+      'p1:p1.1': true, 'p1:p1.2': true, 'p1:p1.3': true,
+      'p2:p2.1': true, 'p2:p2.2': true, 'p2:p2.3': true,
+      'p3:p3.1': true, 'p3:p3.2': true, 'p3:p3.3': true,
+      'p4:p4.1': true, 'p4:p4.2': true, 'p4:p4.3': true, 'p4:p4.4': true,
+      'pl:pl.1': true, 'pl:pl.2': true, 'pl:pl.3': true,
+      's3:s3.1': true, 's3:s3.2': true,
+    };
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          Object.keys(DEFAULT_DONE_ENV).forEach((k) => {
+            if (parsed.done[k] === undefined) parsed.done[k] = DEFAULT_DONE_ENV[k];
+          });
+          return parsed;
+        }
+      } catch (_) {}
+      return { done: { ...DEFAULT_DONE_ENV }, startDate: '' };
+    }
+    function totalExpectedWeeks() {
+      let w = 0;
+      PHASES.forEach((p) => {
+        w += typeof p.weeks === 'number' ? p.weeks : 0;
+      });
+      return w > 0 ? w : 8;
+    }
+
+    function saveState(state) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (_) {}
+    }
+
+    function getTaskKey(phaseId, taskId) {
+      return phaseId + ':' + taskId;
+    }
+
+    let state = loadState();
+
+    function render() {
+      const startDate = document.getElementById('start-date');
+      if (state.startDate) startDate.value = state.startDate;
+      startDate.onchange = () => {
+        state.startDate = startDate.value;
+        saveState(state);
+        updateSummary();
+      };
+
+      const container = document.getElementById('phases');
+      container.innerHTML = '';
+
+      PHASES.forEach((phase) => {
+        const taskKeys = phase.tasks.map((t) => getTaskKey(phase.id, t.id));
+        const doneCount = taskKeys.filter((k) => state.done[k]).length;
+        const allDone = doneCount === phase.tasks.length;
+        const anyDone = doneCount > 0;
+        let statusClass = 'pendente';
+        let statusText = 'Pendente';
+        if (allDone) {
+          statusClass = 'concluida';
+          statusText = 'Concluída';
+        } else if (anyDone) {
+          statusClass = 'em-andamento';
+          statusText = 'Em andamento';
+        }
+
+        const phaseEl = document.createElement('div');
+        phaseEl.className = 'phase';
+        phaseEl.innerHTML = `
+          <div class="phase-header">
+            <span class="phase-title">${phase.name}</span>
+            <div class="phase-meta">
+              <span class="phase-duration">${phase.duration}</span>
+              <span class="phase-status ${statusClass}">${statusText} · ${doneCount}/${phase.tasks.length}</span>
+            </div>
+          </div>
+          <div class="phase-body">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 42px"></th>
+                  <th>Tarefa</th>
+                  <th style="width: 100px">Esforço</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${phase.tasks
+                  .map(
+                    (t) => {
+                      const key = getTaskKey(phase.id, t.id);
+                      const checked = state.done[key];
+                      return `
+                    <tr class="${checked ? 'done' : ''}" data-key="${key}">
+                      <td>
+                        <div class="checkbox-wrap">
+                          <input type="checkbox" ${checked ? 'checked' : ''} data-key="${key}" />
+                        </div>
+                      </td>
+                      <td class="task-name">${t.id} – ${t.name}</td>
+                      <td class="task-effort">${t.effort}</td>
+                    </tr>
+                  `;
+                    },
+                  )
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        phaseEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+          cb.addEventListener('change', () => {
+            state.done[cb.dataset.key] = cb.checked;
+            saveState(state);
+            const row = phaseEl.querySelector(`tr[data-key="${cb.dataset.key}"]`);
+            if (row) row.classList.toggle('done', cb.checked);
+            const doneCount = phaseEl.querySelectorAll('input[type="checkbox"]:checked').length;
+            const statusSpan = phaseEl.querySelector('.phase-status');
+            statusSpan.textContent = (doneCount === phase.tasks.length ? 'Concluída' : doneCount ? 'Em andamento' : 'Pendente') + ' · ' + doneCount + '/' + phase.tasks.length;
+            statusSpan.className = 'phase-status ' + (doneCount === phase.tasks.length ? 'concluida' : doneCount ? 'em-andamento' : 'pendente');
+            updateSummary();
+          });
+        });
+
+        container.appendChild(phaseEl);
+      });
+
+      document.getElementById('btn-reset').onclick = () => {
+        if (confirm('Limpar todas as conclusões? O progresso salvo será perdido.')) {
+          state.done = {};
+          saveState(state);
+          render();
+        }
+      };
+
+      updateSummary();
+    }
+
+    function updateSummary() {
+      let total = 0;
+      let done = 0;
+      PHASES.forEach((p) => {
+        p.tasks.forEach((t) => {
+          total++;
+          if (state.done[getTaskKey(p.id, t.id)]) done++;
+        });
+      });
+
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      document.getElementById('tasks-done').textContent = done;
+      document.getElementById('tasks-total').textContent = total;
+      document.getElementById('tasks-pct').textContent = pct + '%';
+
+      const PRODUCT_CORE_IDS = ['p1', 'p2', 'p3', 'p4'];
+      let pcTotal = 0;
+      let pcDone = 0;
+      PHASES.forEach((p) => {
+        if (!PRODUCT_CORE_IDS.includes(p.id)) return;
+        p.tasks.forEach((t) => {
+          pcTotal++;
+          if (state.done[getTaskKey(p.id, t.id)]) pcDone++;
+        });
+      });
+      const pcPct = pcTotal ? Math.round((pcDone / pcTotal) * 100) : 100;
+      const elCore = document.getElementById('product-f1-f4-pct');
+      if (elCore) {
+        elCore.textContent = pcPct + '%';
+        const wrap = elCore.closest('.gs-card');
+        if (wrap) {
+          wrap.classList.remove('ok', 'bad');
+          wrap.classList.add(pcPct === 100 ? 'ok' : 'bad');
+        }
+      }
+
+      const cardPct = document.getElementById('card-pct');
+      cardPct.className = 'summary-card ' + (pct === 100 ? 'ok' : pct >= 50 ? 'warning' : '');
+      const cardStatus = document.getElementById('card-status');
+      let statusText = '—';
+      if (state.startDate) {
+        const start = new Date(state.startDate);
+        const today = new Date();
+        const elapsedWeeks = (today - start) / (7 * 24 * 60 * 60 * 1000);
+        const expectedWeeks = totalExpectedWeeks();
+        const expectedProgress = Math.min(100, Math.round((elapsedWeeks / expectedWeeks) * 100));
+        if (pct >= expectedProgress - 10) {
+          statusText = 'No prazo';
+          cardStatus.className = 'summary-card ok';
+        } else if (pct >= expectedProgress - 20) {
+          statusText = 'Atenção';
+          cardStatus.className = 'summary-card warning';
+        } else {
+          statusText = 'Atrasado';
+          cardStatus.className = 'summary-card danger';
+        }
+      } else {
+        cardStatus.className = 'summary-card';
+      }
+      document.getElementById('status-text').textContent = statusText;
+    }
+
+    render();
+  </script>
+</body>
+</html>

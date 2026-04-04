@@ -1,0 +1,38 @@
+{
+  "name": "ironbody",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IronBody - Ecossistema fitness Personal + Aluno",
+  "workspaces": [
+    "apps/web",
+    "apps/mobile",
+    "services/api"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w ironbody-api",
+    "dev:web": "npm run dev -w ironbody-web",
+    "build:api": "npm run build -w ironbody-api",
+    "build:web": "npm run build -w ironbody-web",
+    "db:generate": "npm run prisma:generate -w ironbody-api",
+    "db:migrate": "npm run prisma:migrate -w ironbody-api",
+    "db:seed": "npm run prisma:seed -w ironbody-api",
+    "db:studio": "npm run prisma:studio -w ironbody-api",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "next": {
+      "react": "18.2.0",
+      "react-dom": "18.2.0"
+    }
+  }
+}

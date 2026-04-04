@@ -1,0 +1,29 @@
+{
+  "app": { "name": "IronBody" },
+  "auth": {
+    "login": "Log in",
+    "register": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "forgotPassword": "Forgot password",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "roles": {
+    "PERSONAL_PROFESSOR": "Coach / Trainer",
+    "ALUNO": "Student"
+  },
+  "dashboard": {
+    "personal": "Coach Dashboard",
+    "aluno": "My Workouts",
+    "welcome": "Hello"
+  },
+  "nav": {
+    "home": "Home",
+    "workouts": "Workouts",
+    "students": "Students",
+    "profile": "Profile",
+    "logout": "Log out"
+  }
+}

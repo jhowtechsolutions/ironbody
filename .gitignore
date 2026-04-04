@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+.next/
+out/
+.expo/
+*.tsbuildinfo
+
+# Env (nunca commitar credenciais)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+.nyc_output/
+
+# Prisma — manter migration_lock.toml e pastas de migration versionadas
+
+# Expo
+apps/mobile/.expo/
+
+# Misc
+*.pem

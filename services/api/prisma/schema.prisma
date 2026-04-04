@@ -1,0 +1,469 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Rodar seed: npx prisma db seed
+// npm run prisma:seed (usa ts-node)
+
+enum Role {
+  ADMIN
+  PERSONAL_PROFESSOR
+  ALUNO
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+enum BillingPlanType {
+  PERSONAL
+  ALUNO
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  UNPAID
+}
+
+enum ExerciseType {
+  REPETICOES
+  TEMPO
+  DISTANCIA
+  CALORIAS
+  PESO
+  ROUND
+}
+
+enum MediaKind {
+  PHOTO_PROGRESS
+  PHOTO_ASSESSMENT
+  EXERCISE_VIDEO
+  EXERCISE_GIF
+  OTHER
+}
+
+enum MediaEntityType {
+  USER_PROGRESS
+  ASSESSMENT
+  EXERCISE
+  PROFILE
+  OTHER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role
+  plan      Plan     @default(FREE)
+  planType  BillingPlanType?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profilePersonal ProfilePersonal?
+  profileStudent  ProfileStudent?
+  refreshTokens   RefreshToken[]
+  subscriptions  Subscription[]
+  personalLinks   StudentPersonalLink[]  @relation("PersonalLinks")
+  studentLinks    StudentPersonalLink[]   @relation("StudentLinks")
+  invitationsSent Invitation[]
+  simpleWorkoutsOwned SimpleWorkout[]     @relation("PersonalSimpleWorkouts")
+  studentWorkouts     StudentWorkout[]    @relation("StudentSimpleWorkouts")
+  workoutsAsPersonal Workout[]            @relation("WorkoutPersonal")
+  workoutsAsStudent  Workout[]            @relation("WorkoutStudent")
+  assessments     Assessment[]            @relation("AssessmentStudent")
+  progressPhotos  ProgressPhoto[]
+  mediaFiles      MediaFile[]
+  mealLogs        MealLog[]
+  videoCallsAsPersonal VideoCall[]        @relation("VideoCallPersonal")
+  videoCallsAsStudent  VideoCall[]        @relation("VideoCallStudent")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model ProfilePersonal {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cref          String?
+  crefValidado  Boolean  @default(false)
+  crn          String?
+  crnValidado  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ProfileStudent {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  altura    Float?
+  objetivo  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentPersonalLink {
+  id         String   @id @default(cuid())
+  personalId String
+  studentId  String
+  personal   User     @relation("PersonalLinks", fields: [personalId], references: [id], onDelete: Cascade)
+  student    User     @relation("StudentLinks", fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([personalId, studentId])
+  @@index([personalId])
+  @@index([studentId])
+}
+
+model Invitation {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  personalId String
+  personal   User      @relation(fields: [personalId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime?
+  used       Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([personalId])
+}
+
+/// Treino simples criado pelo personal (FASE 4). Distinto do modelo `Workout` legado (modalidade/catálogo).
+model SimpleWorkout {
+  id         String   @id @default(cuid())
+  name       String
+  personalId String
+  personal   User     @relation("PersonalSimpleWorkouts", fields: [personalId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  exercises   SimpleWorkoutExercise[]
+  assignments StudentWorkout[]
+
+  @@index([personalId])
+}
+
+model SimpleWorkoutExercise {
+  id        String        @id @default(cuid())
+  workoutId String
+  workout   SimpleWorkout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  name      String
+  sets      Int
+  reps      Int
+  rest      String
+  order     Int           @default(0)
+
+  @@index([workoutId])
+}
+
+model StudentWorkout {
+  id         String        @id @default(cuid())
+  studentId  String
+  workoutId  String
+  student    User          @relation("StudentSimpleWorkouts", fields: [studentId], references: [id], onDelete: Cascade)
+  workout    SimpleWorkout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  assignedAt DateTime      @default(now())
+
+  @@unique([studentId, workoutId])
+  @@index([studentId])
+  @@index([workoutId])
+}
+
+model Sport {
+  id          String   @id @default(cuid())
+  nome        String
+  descricao   String?
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  categories  SportCategory[]
+  exercises   Exercise[]
+  workouts    Workout[]
+  workoutTemplates WorkoutTemplate[]
+}
+
+model SportCategory {
+  id        String   @id @default(cuid())
+  sportId   String
+  sport     Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  nome      String
+  descricao String?
+  createdAt DateTime @default(now())
+
+  workouts         Workout[]
+  workoutTemplates WorkoutTemplate[]
+
+  @@index([sportId])
+}
+
+model Exercise {
+  id            String       @id @default(cuid())
+  nome          String
+  sportId       String
+  sport         Sport        @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  tipoExercicio ExerciseType
+  descricao     String?
+  videoUrl      String?
+  gifUrl        String?
+  ativo         Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  workoutExercises WorkoutExercise[]
+  setLogs           SetLog[]
+
+  @@index([sportId])
+}
+
+model WorkoutTemplate {
+  id         String   @id @default(cuid())
+  nome       String
+  sportId    String
+  categoryId String
+  sport      Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  category   SportCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  objetivo   String?
+  tipoSessao String?
+  createdAt  DateTime @default(now())
+
+  @@index([sportId])
+  @@index([categoryId])
+}
+
+model Workout {
+  id          String   @id @default(cuid())
+  studentId   String
+  personalId  String
+  sportId     String
+  categoryId  String
+  nome        String?
+  tipo        String?
+  objetivo    String?
+  scheduledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student  User     @relation("WorkoutStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  personal User     @relation("WorkoutPersonal", fields: [personalId], references: [id], onDelete: Cascade)
+  sport    Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  category SportCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  exercises WorkoutExercise[]
+  sessions  WorkoutSession[]
+
+  @@index([studentId])
+  @@index([personalId])
+  @@index([sportId])
+}
+
+model WorkoutExercise {
+  id          String   @id @default(cuid())
+  workoutId   String
+  exerciseId  String
+  orderIndex  Int      @default(0)
+  sets        Int?
+  reps        String?
+  tempo       String?
+  distancia   String?
+  peso        String?
+  restSeconds Int?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([workoutId])
+  @@index([exerciseId])
+}
+
+model WorkoutSession {
+  id        String   @id @default(cuid())
+  workoutId String
+  data      DateTime @default(now())
+  completed Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  workout Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  setLogs SetLog[]
+
+  @@index([workoutId])
+}
+
+model SetLog {
+  id         String   @id @default(cuid())
+  sessionId  String
+  exerciseId String
+  orderIndex Int      @default(0)
+  peso       Float?
+  repeticoes Int?
+  tempo      Int?
+  distancia  Float?
+  rounds     Int?
+  calorias   Int?
+  completed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  session  WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([exerciseId])
+}
+
+model Assessment {
+  id        String   @id @default(cuid())
+  studentId String
+  data      DateTime @default(now())
+  peso      Float?
+  imc       Float?
+  observacoes String?
+  createdAt DateTime @default(now())
+
+  student     User     @relation("AssessmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  bodyMeasures BodyMeasure[]
+  adipometry  Adipometry[]
+}
+
+model BodyMeasure {
+  id           String   @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  medida       String
+  valor        Float
+  unidade      String   @default("cm")
+  createdAt    DateTime @default(now())
+
+  @@index([assessmentId])
+}
+
+model Adipometry {
+  id           String   @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  local        String
+  valor        Float
+  createdAt    DateTime @default(now())
+
+  @@index([assessmentId])
+}
+
+model ProgressPhoto {
+  id        String   @id @default(cuid())
+  studentId String
+  user      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fotoUrl   String
+  data      DateTime @default(now())
+  observacao String?
+  createdAt DateTime @default(now())
+
+  @@index([studentId])
+}
+
+model MediaFile {
+  id          String           @id @default(cuid())
+  ownerUserId String
+  owner       User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  entityType  MediaEntityType
+  entityId    String?
+  kind        MediaKind
+  bucket      String
+  objectKey   String           @unique
+  url         String
+  mimeType    String
+  sizeBytes   Int
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([ownerUserId])
+  @@index([entityType, entityId])
+  @@index([kind])
+}
+
+model MealLog {
+  id          String   @id @default(cuid())
+  studentId   String
+  user        User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fotoUrl     String?
+  calorias    Float?
+  proteina    Float?
+  carboidrato Float?
+  gordura     Float?
+  alimentos   String?
+  data        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([studentId])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  planType             BillingPlanType
+  status               SubscriptionStatus @default(INCOMPLETE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+}
+
+model StripeWebhookEvent {
+  id        String   @id
+  type      String
+  createdAt DateTime @default(now())
+}
+
+model VideoCall {
+  id         String   @id @default(cuid())
+  personalId String
+  studentId  String
+  data       DateTime @default(now())
+  duration   Int?
+  status     String?
+  createdAt  DateTime @default(now())
+
+  personal User @relation("VideoCallPersonal", fields: [personalId], references: [id], onDelete: Cascade)
+  student  User @relation("VideoCallStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([personalId])
+  @@index([studentId])
+}
+
+model AiLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  endpoint  String
+  prompt    String?
+  response  String?
+  model     String?
+  createdAt DateTime @default(now())
+}
